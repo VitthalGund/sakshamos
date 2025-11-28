@@ -48,7 +48,6 @@ export default function RateCalculatorPage() {
     hoursPerDay: 6,
     profitMargin: 20,
   });
-  const [hourlyResult, setHourlyResult] = useState({ rate: 0, gross: 0, hours: 0 });
 
   // Project State
   const [projectInputs, setProjectInputs] = useState({
@@ -57,38 +56,35 @@ export default function RateCalculatorPage() {
     complexity: 1, // 1, 1.25, 1.5
     expenses: 0,
   });
-  const [projectResult, setProjectResult] = useState({ total: 0 });
 
   const [showFormula, setShowFormula] = useState(false);
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  // Calculate Hourly
-  useEffect(() => {
+  // Calculate Hourly (Derived State)
+  const hourlyResult = (() => {
     const { desiredIncome, expenses, workingDays, hoursPerDay, profitMargin } = hourlyInputs;
     const need = Number(desiredIncome) + Number(expenses);
     const grossNeeded = need / (1 - (Number(profitMargin) / 100));
     const totalHours = Number(workingDays) * Number(hoursPerDay);
     const rate = totalHours > 0 ? grossNeeded / totalHours : 0;
 
-    setHourlyResult({
+    return {
       rate: Math.round(rate),
       gross: Math.round(grossNeeded),
       hours: totalHours,
-    });
-    
-    // Auto-fill base rate for project if it's 0
-    if (projectInputs.baseRate === 0 && rate > 0) {
-      setProjectInputs(prev => ({ ...prev, baseRate: Math.round(rate) }));
-    }
-  }, [hourlyInputs]);
+    };
+  })();
 
-  // Calculate Project
-  useEffect(() => {
-    const { baseRate, hours, complexity, expenses } = projectInputs;
+  // Calculate Project (Derived State)
+  const projectResult = (() => {
+    // Auto-fill base rate if 0
+    const baseRate = projectInputs.baseRate === 0 && hourlyResult.rate > 0 ? hourlyResult.rate : projectInputs.baseRate;
+    
+    const { hours, complexity, expenses } = projectInputs;
     const total = (Number(baseRate) * Number(hours) * Number(complexity)) + Number(expenses);
-    setProjectResult({ total: Math.round(total) });
-  }, [projectInputs]);
+    return { total: Math.round(total) };
+  })();
 
   const handleHourlyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;

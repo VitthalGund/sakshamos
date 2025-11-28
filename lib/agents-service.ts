@@ -97,7 +97,7 @@ export async function runAgents(userId: string) {
     const mockTxnDoc = await Transaction.findOne({ user_id: userId }).sort({ date: -1 });
 
     if (mockTxnDoc) {
-        const mockTxn: CFO.Transaction = {
+        const mockTxn: CFO.TransactionType = {
             transaction_id: mockTxnDoc.txnId,
             user_id: mockTxnDoc.user_id,
             amount: Number(mockTxnDoc.amount),

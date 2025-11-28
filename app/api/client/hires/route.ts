@@ -7,7 +7,7 @@ import User from "@/models/User"; // Assuming we might need to fetch freelancer 
 
 export async function GET() {
     try {
-        const session = await getServerSession(authOptions as any) as Session | null;
+        const session:any = await getServerSession(authOptions as any) as Session | null;
         if (!session || !session.user || session.user.role !== "client") {
             return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
         }

@@ -116,7 +116,29 @@ async function verifyAgents() {
         priority: "High"
     });
 
-    const scheduleResult = await evaluateSchedule(testUserId);
+    // Fetch data for schedule evaluation
+    const tasks = await Task.find({ userId: testUserId });
+    const events = await Event.find({ userId: testUserId });
+
+    const schedule = {
+        user_id: testUserId,
+        tasks: tasks.map((t: any) => ({ 
+            id: t._id.toString(), 
+            dueDate: t.dueDate, 
+            est_hours: t.est_hours, 
+            priority: t.priority, 
+            done: t.done 
+        })),
+        calendarEvents: events.map((e: any) => ({ 
+            id: e.event_id, 
+            start: e.start_time, 
+            end: e.end_time, 
+            title: e.title 
+        })),
+        capacity: { billableDaysPerYear: 240, billableHoursPerDay: 6 }
+    };
+
+    const scheduleResult = await evaluateSchedule(schedule);
     console.log('Productivity Utilization:', scheduleResult.utilization);
     console.log('Productivity Actions:', scheduleResult.actions.map(a => a.type));
 

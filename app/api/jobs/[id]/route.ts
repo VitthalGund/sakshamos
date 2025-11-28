@@ -8,7 +8,7 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
     const params = await props.params;
     console.log(`[Job API] Request for ID: ${params.id}`);
     try {
-        const session = await getServerSession(authOptions as any) as Session | null;
+        const session:any = await getServerSession(authOptions as any) as Session | null;
         await dbConnect();
 
         const job = await Job.findById(params.id);

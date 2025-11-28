@@ -11,7 +11,7 @@ import path from "path";
 export async function POST(req: Request) {
     try {
         await dbConnect();
-        const session = await getServerSession(authOptions as any) as Session | null;
+        const session:any = await getServerSession(authOptions as any) as Session | null;
 
         if (!session || !session.user) {
             return NextResponse.json({ message: "Unauthorized" }, { status: 401 });

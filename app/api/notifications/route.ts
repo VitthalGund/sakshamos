@@ -7,7 +7,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 export async function GET(req: Request) {
     try {
         await dbConnect();
-        const session = await getServerSession(authOptions as any);
+        const session: any = await getServerSession(authOptions as any);
 
         // For now, fetch all 'job_post' notifications (broadcast) 
         // AND any notifications specific to the logged-in user.

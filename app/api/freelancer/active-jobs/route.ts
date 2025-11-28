@@ -6,7 +6,7 @@ import Job from "@/models/Job";
 
 export async function GET() {
     try {
-        const session = await getServerSession(authOptions as any) as Session | null;
+        const session:any = await getServerSession(authOptions as any) as Session | null;
         if (!session || !session.user || session.user.role !== "freelancer") {
             return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
         }

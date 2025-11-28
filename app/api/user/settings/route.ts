@@ -6,7 +6,7 @@ import User from "@/models/User";
 
 export async function PUT(req: Request) {
     try {
-        const session = await getServerSession(authOptions as any);
+        const session: any = await getServerSession(authOptions as any);
         if (!session || !session.user) {
             return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
         }
@@ -58,7 +58,7 @@ export async function PUT(req: Request) {
 
 export async function GET(req: Request) {
     try {
-        const session = await getServerSession(authOptions as any);
+        const session: any = await getServerSession(authOptions as any);
         if (!session || !session.user) {
             return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
         }

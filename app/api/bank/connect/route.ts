@@ -6,7 +6,7 @@ import BankAccount from "@/models/BankAccount";
 
 export async function POST(req: Request) {
     try {
-        const session = await getServerSession(authOptions as any);
+        const session: any = await getServerSession(authOptions as any);
         if (!session || !session.user) {
             return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
         }

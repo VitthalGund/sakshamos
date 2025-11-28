@@ -7,7 +7,8 @@ import dbConnect from "@/lib/db";
 import Notification from "@/models/Notification";
 import Job from "@/models/Job";
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
+    const params = await props.params;
     try {
         const session: any = await getServerSession(authOptions as any);
         if (!session || !session.user) {

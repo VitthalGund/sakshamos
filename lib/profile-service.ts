@@ -28,14 +28,36 @@ export interface ProfileData {
     total_spent?: number;
 }
 
+interface FreelancerCSV {
+    freelancer_id: string;
+    name: string;
+    skills: string;
+    experience_years: string;
+    total_revenue: string;
+    past_projects_count: string;
+    credibility_score: string;
+}
+
+interface ClientCSV {
+    client_id: string;
+    company_id?: string;
+    company_name: string;
+    total_jobs_posted: string;
+    avg_money_spent_per_project: string;
+    total_freelancers_hired: string;
+}
+
 export async function getProfileById(id: string): Promise<ProfileData | null> {
     await dbConnect();
 
     // 1. Check MongoDB
     // We search by userId (custom ID) or _id
-    const dbUser = await User.findOne({
-        $or: [{ userId: id }, { _id: id.match(/^[0-9a-fA-F]{24}$/) ? id : null }]
-    });
+    const query: any = { $or: [{ userId: id }] };
+    if (id.match(/^[0-9a-fA-F]{24}$/)) {
+        query.$or.push({ _id: id });
+    }
+
+    const dbUser = await User.findOne(query);
 
     if (dbUser) {
         return {
@@ -73,9 +95,9 @@ export async function getProfileById(id: string): Promise<ProfileData | null> {
         const freelancersPath = path.join(csvDir, 'freelancers_profile.csv');
         if (fs.existsSync(freelancersPath)) {
             const freelancersCsv = fs.readFileSync(freelancersPath, 'utf8');
-            const { data: freelancers } = Papa.parse(freelancersCsv, { header: true });
+            const { data: freelancers } = Papa.parse<FreelancerCSV>(freelancersCsv, { header: true });
     
-            const freelancer = freelancers.find((f: any) => f.freelancer_id === id);
+            const freelancer = freelancers.find((f) => f.freelancer_id === id);
             if (freelancer) {
                 return {
                     id: freelancer.freelancer_id,
@@ -103,9 +125,9 @@ export async function getProfileById(id: string): Promise<ProfileData | null> {
         const clientsPath = path.join(csvDir, 'clients_profile.csv');
         if (fs.existsSync(clientsPath)) {
             const clientsCsv = fs.readFileSync(clientsPath, 'utf8');
-            const { data: clients } = Papa.parse(clientsCsv, { header: true });
+            const { data: clients } = Papa.parse<ClientCSV>(clientsCsv, { header: true });
     
-            const client = clients.find((c: any) => c.client_id === id || c.company_id === id);
+            const client = clients.find((c) => c.client_id === id || c.company_id === id);
             if (client) {
                 return {
                     id: client.client_id,

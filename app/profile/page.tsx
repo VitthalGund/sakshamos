@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 
 export default async function ProfileRedirectPage() {
-  const session = await getServerSession(authOptions);
+  const session:any = await getServerSession(authOptions);
 
   if (!session || !session.user) {
     redirect("/auth/login");

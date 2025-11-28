@@ -1,6 +1,6 @@
 // lib/agents/productivity.ts
 import { callGemini } from "./ai-client";
-import Task from "@/models/Task";
+
 import Event from "@/models/Event";
 
 export type UserSchedule = {
@@ -40,27 +40,18 @@ export function shouldEvaluateSchedule(eventType: "task_created" | "deadline_app
 /**
  * Main: evaluateSchedule returns utilization + actions to perform (UI shows them).
  */
-export async function evaluateSchedule(userId: string) {
-    // Fetch REAL tasks and events from DB
-
+export async function evaluateSchedule(schedule: UserSchedule) {
     const now = new Date();
     const next7Days = new Date();
     next7Days.setDate(now.getDate() + 7);
 
-    const tasks = await Task.find({
-        userId: userId,
-        done: false,
-        dueDate: { $gte: now, $lte: next7Days }
-    }).lean();
-
-    const events = await Event.find({
-        userId: userId,
-        start_time: { $gte: now.toISOString() }, // Assuming ISO string storage for now based on Event model
-        end_time: { $lte: next7Days.toISOString() }
-    }).lean();
-
-    const upcomingTasks = tasks.map((t: any) => ({
-        id: t._id.toString(),
+    const upcomingTasks = schedule.tasks.filter(t => {
+        if (t.done) return false;
+        if (!t.dueDate) return false;
+        const d = new Date(t.dueDate);
+        return d >= now && d <= next7Days;
+    }).map(t => ({
+        id: t.id,
         dueDate: t.dueDate,
         est_hours: t.est_hours || 1,
         priority: t.priority,
@@ -85,8 +76,8 @@ export async function evaluateSchedule(userId: string) {
     const defaultStart = new Date(tomorrow.setHours(9, 0, 0, 0)).toISOString();
     const defaultEnd = new Date(new Date(defaultStart).getTime() + 2 * 3600 * 1000).toISOString();
 
-    const overlapping = events.some((e: any) => {
-        const s = new Date(e.start_time), en = new Date(e.end_time);
+    const overlapping = schedule.calendarEvents.some(e => {
+        const s = new Date(e.start), en = new Date(e.end);
         return new Date(defaultStart) < en && new Date(defaultEnd) > s;
     });
 
