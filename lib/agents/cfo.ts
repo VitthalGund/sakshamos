@@ -1,7 +1,9 @@
 // lib/agents/cfo.ts
 import { callGemini } from "./ai-client";
+import Transaction from "@/models/Transaction";
+import Notification from "@/models/Notification";
 
-export type Transaction = {
+export type TransactionType = {
     transaction_id: string;
     user_id: string;
     amount: number;
@@ -21,29 +23,91 @@ export type SmartSplitConfig = {
 export const DEFAULT_SPLIT: SmartSplitConfig = { tax_pct: 30, savings_pct: 20, buffer_pct: 50 };
 
 /**
- * Trigger helper: decide whether CFO agent should act.
- * - Act on incoming credits (payments).
- * - Act on low-balance alerts (if balance provided and below threshold).
+ * Calculates macro financial metrics for the user.
  */
-export function shouldActOnTransaction(txn: Transaction, profile: { balances?: { checking?: number } } = { balances: {} }) {
+export async function calculateFinancialMetrics(userId: string) {
+    const ninetyDaysAgo = new Date();
+    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+
+    const transactions = await Transaction.find({
+        user_id: userId,
+        date: { $gte: ninetyDaysAgo }
+    }).lean();
+
+    let totalLiquidity = 0; // Ideally fetch from User model or latest transaction balance
+    // For now, let's try to find the latest transaction to get the balance
+    const latestTxn = await Transaction.findOne({ user_id: userId }).sort({ date: -1 }).lean();
+    if (latestTxn && typeof latestTxn.balance_after_transaction === 'number') {
+        totalLiquidity = latestTxn.balance_after_transaction;
+    }
+
+    let totalBurn = 0;
+    transactions.forEach((t: any) => {
+        if (t.transaction_type === 'DEBIT' || t.type === 'DEBIT') {
+            totalBurn += t.amount;
+        }
+    });
+
+    const monthlyBurnRate = totalBurn / 3; // Average over 3 months
+    const runwayDays = monthlyBurnRate > 0 ? (totalLiquidity / (monthlyBurnRate / 30)) : 0;
+    
+    // Health Score: Goal is 180 days (6 months) runway
+    const healthScore = Math.min(100, Math.round((runwayDays / 180) * 100));
+
+    return {
+        liquidity: totalLiquidity,
+        burnRate: Math.round(monthlyBurnRate),
+        runwayDays: Math.round(runwayDays),
+        healthScore
+    };
+}
+
+/**
+ * Calculates estimated tax liability for the current financial year.
+ */
+export async function calculateTaxLiability(userId: string) {
+    // Financial Year starts April 1st
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const startYear = now.getMonth() >= 3 ? currentYear : currentYear - 1;
+    const fyStart = new Date(`${startYear}-04-01`);
+
+    const transactions = await Transaction.find({
+        user_id: userId,
+        date: { $gte: fyStart },
+        $or: [{ type: 'CREDIT' }, { transaction_type: 'CREDIT' }]
+    }).lean();
+
+    let totalIncome = 0;
+    transactions.forEach((t: any) => {
+        totalIncome += t.amount;
+    });
+
+    // Simple 30% estimation
+    const estimatedTaxDue = Math.round(totalIncome * 0.3);
+
+    return { estimatedTaxDue };
+}
+
+/**
+ * Trigger helper: decide whether CFO agent should act.
+ */
+export function shouldActOnTransaction(txn: TransactionType, profile: { balances?: { checking?: number } } = { balances: {} }) {
     if (!txn) return false;
     const t = (txn.type || "").toUpperCase();
-    // Always act on CREDIT transactions (incoming payments)
     if (t === "CREDIT" && txn.amount > 0) return true;
-    // If DEBIT and balance falls below threshold, act
     if (t === "DEBIT" && typeof txn.balance_after_transaction === "number") {
-        const lowBalanceThreshold = (profile.balances?.checking ?? 0) * 0.15; // 15% of configured checking balance
+        const lowBalanceThreshold = (profile.balances?.checking ?? 0) * 0.15;
         if (txn.balance_after_transaction < lowBalanceThreshold) return true;
     }
     return false;
 }
 
 /**
- * Main handler: onTransaction - suggests smart split for incoming payments,
- * basic alerts on low balance, and returns an actionable payload (do not auto-execute).
+ * Main handler: onTransaction - suggests smart split and persists notifications.
  */
 export async function onTransaction(
-    txn: Transaction,
+    txn: TransactionType,
     profile: { user_id: string; monthly_burn?: number; balances?: any; smart_split_config?: SmartSplitConfig } = { user_id: "" }
 ) {
     if (!txn) return null;
@@ -55,6 +119,16 @@ export async function onTransaction(
         if (txn.balance_after_transaction < lowBalanceThreshold) {
             const prompt = `Shortly notify user: account balance low. Balance after transaction: ₹${txn.balance_after_transaction}. Suggest 3 quick actions: (1) pause non-essential services (2) request early payments (3) move buffer from savings. Output 3 bullets.`;
             const gm = await callGemini(prompt, 120);
+            
+            // Persist Low Balance Alert
+            await Notification.create({
+                recipientId: txn.user_id,
+                type: "system", // or 'alert'
+                message: gm.text || `Low balance alert: ₹${txn.balance_after_transaction}`,
+                read: false,
+                relatedJobId: txn.transaction_id // reusing field for entity ID
+            });
+
             return {
                 type: "low_balance_alert",
                 txn_id: txn.transaction_id,
@@ -83,11 +157,32 @@ export async function onTransaction(
         const prompt = `Summarize the following split to the user in two short sentences: Incoming payment ₹${txn.amount}. We suggest: Tax ₹${tax_amount}, Savings ₹${savings_amount}, Checking ₹${buffer_amount}. Also include one short actionable sentence: "Approve transfers" or "Adjust split".`;
         const gm = await callGemini(prompt, 120);
 
+        const message = gm.text || `Incoming ₹${txn.amount}. Suggested Split: Tax ₹${tax_amount}, Savings ₹${savings_amount}.`;
+
+        // Persist Smart Split Notification
+        await Notification.create({
+            recipientId: txn.user_id,
+            type: "action_required", // New type for actionable notifications
+            message: message,
+            read: false,
+            relatedJobId: txn.transaction_id,
+            metadata: {
+                split: {
+                    tax: tax_amount,
+                    savings: savings_amount,
+                    buffer: buffer_amount
+                },
+                originalAmount: txn.amount
+            }
+        });
+
+        console.log(`CFO Agent: Smart Split Notification created for Txn ${txn.transaction_id}`);
+
         return {
             type: "smart_split",
             txn_id: txn.transaction_id,
             suggested_actions: actions,
-            message: gm.text || `Split: Tax ${tax_amount}, Savings ${savings_amount}, Checking ${buffer_amount}`,
+            message: message,
             meta: {
                 tax_pct: cfg.tax_pct,
                 savings_pct: cfg.savings_pct,

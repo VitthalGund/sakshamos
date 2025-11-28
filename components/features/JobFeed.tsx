@@ -38,7 +38,7 @@ export function JobFeed({ initialJobs }: JobFeedProps) {
       <div className="space-y-4 overflow-y-auto pr-2 custom-scrollbar flex-1">
         {jobs.map((job, index) => (
           <motion.div
-            key={job.job_id}
+            key={job.job_id || job._id || index}
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: index * 0.1 }}

@@ -32,6 +32,8 @@ export interface Job {
     job_status: string;
     match_score?: number; // Optional as it's not in the JSON but used in UI
     platform?: string; // Optional, might need to derive or mock
+    _id?: string;
+    hasDraft?: boolean;
 }
 
 export interface Invoice {
